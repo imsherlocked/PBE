@@ -21,4 +21,4 @@ ENV PORT=5000
 ENV NODE_ENV=production
 
 # Start the server
-CMD ["nodemon", "server.js"]
+CMD ["node", "server.js"]

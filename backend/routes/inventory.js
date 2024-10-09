@@ -1,47 +1,137 @@
 const express = require('express');
-const mongoose = require('mongoose');
-const AWS = require('aws-sdk');
-const cors = require('cors');
-const connectDB = require('./config/db'); // Import DB connection
-// const { dynamoDB, TABLE_NAME, ARCHIVE_TABLE_NAME } = require('./config/aws');
-const Item =  require('./models/items');
-require('dotenv').config();
+const router = express.Router();
+const Item = require('../models/items');
+const { dynamoDB, TABLE_NAME, ARCHIVE_TABLE_NAME } = require('../config/aws');
 
-const app = express();
-const PORT = process.env.PORT || 5000;
+// // Get paginated inventory items
+// router.get('/items', async (req, res) => {
+//     // const { page = 1, limit = 7 } = req.query;
+//     // const startIndex = (page - 1) * limit;
+//     // const totalItems = await Item.countDocuments();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+//     try {
+//         const items = await Item.find();
+//             // .limit(Number(limit))
+//             // .skip(startIndex)
+//             // .exec();
 
-// Connect to MongoDB
-// mongoose.connect(process.env.MONGODB_URI, {
-//     useNewUrlParser: true,
-//     useUnifiedTopology: true,
-// }).then(() => console.log('MongoDB connected'))
-//   .catch(err => console.error('MongoDB connection error:', err));
-connectDB();
-
-// Inventory Item Schema
-// const itemSchema = new mongoose.Schema({
-//     name: String,
-//     quantity: Number,
-//     price: Number,
+//         // res.json({
+//         //     items,
+//         //     totalPages: Math.ceil(totalItems / limit),
+//         //     currentPage: Number(page),
+//         // });
+//         res.json(items);
+//     } catch (error) {
+//         res.status(500).json({ error: 'An error occurred while fetching items.' });
+//     }
 // });
 
-// const Item = mongoose.model('Item', itemSchema);
+// // Add new item
+// router.post('/add', async (req, res) => {
+//     try {
+//         const newItem = new Item(req.body);
+//         await newItem.save();
 
-AWS.config.update({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION,
-});
+//         // Add to DynamoDB
+//         const dynamoParams = {
+//             TableName: TABLE_NAME,
+//             Item: {
+//                 id: newItem._id.toString(),
+//                 name: newItem.name,
+//                 quantity: newItem.quantity,
+//                 price: newItem.price,
+//             },
+//         };
+//         await dynamoDB.put(dynamoParams).promise();
 
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
+//         res.json(newItem);
+//     } catch (error) {
+//         res.status(500).json({ error: 'An error occurred while adding the item.' });
+//     }
+// });
 
-const TABLE_NAME = 'inventorydbsecondary'; // DynamoDB Table Name
+// // Update item
+// router.put('/update/:id', async (req, res) => {
+//     const updatedItem = await Item.findByIdAndUpdate(req.params.id, req.body, { new: true });
 
-app.get('/api/inventory/items', async (req, res) => {
+//     try {
+//         const dynamoParams = {
+//             TableName: TABLE_NAME,
+//             Key: { id: req.params.id },
+//             UpdateExpression: 'set #name = :name, #quantity = :quantity, #price = :price',
+//             ExpressionAttributeNames: {
+//                 '#name': 'name',
+//                 '#quantity': 'quantity',
+//                 '#price': 'price',
+//             },
+//             ExpressionAttributeValues: {
+//                 ':name': updatedItem.name,
+//                 ':quantity': updatedItem.quantity,
+//                 ':price': updatedItem.price,
+//             },
+//             ReturnValues: 'UPDATED_NEW',
+//         };
+//         await dynamoDB.update(dynamoParams).promise();
+
+//         res.json(updatedItem);
+//     } catch (error) {
+//         res.status(500).json({ error: 'Failed to update item in DynamoDB, rolled back MongoDB.' });
+//     }
+// });
+
+// // Delete item
+// router.delete('/delete/:id', async (req, res) => {
+//     await Item.findByIdAndDelete(req.params.id);
+
+//     try {
+//         const dynamoParams = {
+//             TableName: TABLE_NAME,
+//             Key: { id: req.params.id },
+//         };
+//         await dynamoDB.delete(dynamoParams).promise();
+
+//         res.json({ message: 'Item deleted' });
+//     } catch (error) {
+//         res.status(500).json({ error: 'Failed to delete item from DynamoDB, rolled back MongoDB.' });
+//     }
+// });
+
+// // Archive item
+// router.post('/archive/:id', async (req, res) => {
+//     try {
+//         const itemToArchive = await Item.findById(req.params.id);
+//         if (!itemToArchive) {
+//             return res.status(404).json({ error: 'Item not found' });
+//         }
+
+//         // Archive item in DynamoDB
+//         const archiveParams = {
+//             TableName: ARCHIVE_TABLE_NAME,
+//             Item: {
+//                 id: itemToArchive._id.toString(),
+//                 name: itemToArchive.name,
+//                 quantity: itemToArchive.quantity,
+//                 price: itemToArchive.price,
+//                 archivedAt: new Date().toISOString(),
+//             },
+//         };
+//         await dynamoDB.put(archiveParams).promise();
+
+//         // Delete from active DynamoDB and MongoDB
+//         const deleteParams = {
+//             TableName: TABLE_NAME,
+//             Key: { id: itemToArchive._id.toString() },
+//         };
+//         await dynamoDB.delete(deleteParams).promise();
+//         await Item.findByIdAndDelete(req.params.id);
+
+//         res.json({ message: 'Item archived successfully' });
+//     } catch (error) {
+//         res.status(500).json({ error: 'Failed to archive item' });
+//     }
+// });
+
+router.get('/api/inventory/items', async (req, res) => {
     console.log("Inside get")
     // const { page = 1, limit = 7 } = req.query; // Default to page 1 and limit 7 items per page
     // const startIndex = (page - 1) * limit;
@@ -92,7 +182,7 @@ app.get('/api/inventory/items', async (req, res) => {
 
 
 
-app.post('/api/inventory/add', async (req, res) => {
+router.post('/api/inventory/add', async (req, res) => {
     console.log("Inside add")
     try {
         console.log("Inside add try")
@@ -126,7 +216,7 @@ app.post('/api/inventory/add', async (req, res) => {
     }
 });
 
-app.put('/api/inventory/update/:id', async (req, res) => {
+router.put('/api/inventory/update/:id', async (req, res) => {
     const updatedItem = await Item.findByIdAndUpdate(req.params.id, req.body, { new: true });
 
     try {
@@ -158,7 +248,7 @@ app.put('/api/inventory/update/:id', async (req, res) => {
     res.json(updatedItem);
 });
 
-app.delete('/api/inventory/delete/:id', async (req, res) => {
+router.delete('/api/inventory/delete/:id', async (req, res) => {
     await Item.findByIdAndDelete(req.params.id);
 
     try {
@@ -179,7 +269,7 @@ app.delete('/api/inventory/delete/:id', async (req, res) => {
 });
 
 // Archive an item by moving it to the archived DynamoDB table and deleting from primary DB
-app.post('/api/inventory/archive/:id', async (req, res) => {
+router.post('/api/inventory/archive/:id', async (req, res) => {
     try {
         // Find the item in MongoDB
         const itemToArchive = await Item.findById(req.params.id);
@@ -220,28 +310,5 @@ app.post('/api/inventory/archive/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to archive item' });
     }
 });
-// app.get('/items', async (req, res) => {
-//     const items = await Item.find();
-//     res.json(items);
-// });
 
-// app.post('/items', async (req, res) => {
-//     const newItem = new Item(req.body);
-//     await newItem.save();
-//     res.json(newItem);
-// });
-
-// app.put('/items/:id', async (req, res) => {
-//     const updatedItem = await Item.findByIdAndUpdate(req.params.id, req.body, { new: true });
-//     res.json(updatedItem);
-// });
-
-// app.delete('/items/:id', async (req, res) => {
-//     await Item.findByIdAndDelete(req.params.id);
-//     res.json({ message: 'Item deleted' });
-// });
-
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT} hello`);
-});
+module.exports = router;
